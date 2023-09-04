@@ -38,7 +38,7 @@ Mengecek keberadaan missing value
 # Cek apakah ada missing value:
 data1[which(is.na(data1$Close)),]
 ```
-Dari output di atas, dapat terlihat bahwa terdapat missing value pada baris ke-87 atau pada tanggal 2 mei 2022. Hal ini melanggar salah satu syarat data time series, yaitu rentang waktu yang tidak sama. Oleh karena itu, akan dilakukan penanganan missing value
+Dari output di atas, dapat terlihat bahwa terdapat missing value pada baris ke-109 atau pada tanggal 2 mei 2022. Hal ini melanggar salah satu syarat data time series, yaitu rentang waktu yang tidak sama. Oleh karena itu, akan dilakukan penanganan missing value
 ## Menduga missing value
 
 ```{r}
