@@ -1,0 +1,242 @@
+---
+title: "Pertemuan 2 - Regresi"
+author:Diva Nisfu Mustika
+output:
+  html_document:
+    theme: yeti
+    toc: true
+    toc_float: true
+  word_document: default
+  pdf_document: default
+---
+
+## Pemanggilan *Packages*
+
+```{r}
+library(dplyr)
+library(TTR)
+library(forecast)
+library(lmtest) #digunakan untuk uji formal pendeteksian autokorelasi
+library(zoo)
+library(orcutt) #untuk membuat model regresi Cochrane-Orcutt
+library(HoRM) #untuk membuat model regresi Hildreth-Lu
+library(rio)
+```
+
+## Input Data
+
+Data yang digunakan dalam kesempatan kali ini adalah data Air Quality New Delhi yang berjumlah 72 baris.
+
+```{r}
+data <- import('https://raw.githubusercontent.com/divanm/mpdw/main/pertemuan%202/salesmonthlyp2.csv')
+```
+
+## Eksplorasi Data
+
+Sebelum melakukan regresi, akan diperlihatkan *plot time-series* dari kadar no2 dan so2 dalam air quality new delhi.
+
+```{r}
+#Membentuk objek time series
+data1.ts<-ts(data$N02BE)
+data1.ts
+#Membentuk objek time series
+data2.ts<-ts(data$N05B)
+data2.ts
+#Membuat plot time series
+ts.plot(data1.ts, xlab="Time Period ", ylab="N02BE", main= "Time Series Plot of N02BE")
+points(data1.ts)
+#Membuat plot time series
+ts.plot(data2.ts, xlab="Time Period ", ylab="N05B", main= "Time Series Plot of N05B")
+points(data2.ts)
+
+```
+
+## Regresi
+
+```{r}
+#Pembuatan Model Regresi
+#model regresi
+model<- lm(N02BA~N02BE+N05B, data = data)
+summary(model)
+```
+
+Model yang dihasilkan adalah $$y_i=23.988 + 75.765 x_1-7.604 x_2$$ Berdasarkan ringkasan model dapat diketahui bahwa hasil uji F memiliki *p-value* \<$\alpha$ (5%). Artinya, minimal terdapat satu variabel yang berpengaruh nyata terhadap model. Hasil uji-t parsial ketiga parameter regresi, yaitu intersep, b1, dan b2 menunjukan  memiliki *p-value* \< $\alpha$ (5%) sehingga nyata dalam taraf 5%.  Selanjutnya dapat dilihat juga nilai $R^2=0.395$. Artinya, sebesar 39.5% keragaman nilai N02BA dapat dijelaskan oleh peubah N02BE dan N05B. Hasil ini menunjukkan hasil yang bagus, seolah mendapatkan hasil terbaik. Namun, kita perlu melakukan uji terhadap sisaannya seperti berikut ini.
+
+```{r}
+#sisaan dan fitted value
+sisaan<- residuals(model)
+fitValue<- predict(model)
+
+#Diagnostik dengan eksploratif
+par(mfrow = c(2,2))
+qqnorm(sisaan)
+qqline(sisaan, col = "steelblue", lwd = 2)
+plot(fitValue, sisaan, col = "steelblue", pch = 20, xlab = "Sisaan", ylab = "Fitted Values", main = "Sisaan vs Fitted Values")
+abline(a = 0, b = 0, lwd = 2)
+hist(sisaan, col = "steelblue")
+plot(seq(1,70,1), sisaan, col = "steelblue", pch = 20, xlab = "Sisaan", ylab = "Order", main = "Sisaan vs Order")
+lines(seq(1,70,1), sisaan, col = "red")
+abline(a = 0, b = 0, lwd = 2)
+```
+
+Dua plot di samping kiri digunakan untuk melihat apakah sisaan menyebar normal. Normal Q-Q Plot di atas menunjukkan bahwa sisaan cenderung menyebar normal, tetapi histogram dari sisaan tidak menunjukkan demikian. Selanjutnya, dua plot di samping kanan digunakan untuk melihat autokorelasi. Plot Sisaan vs *Fitted Value* dan Plot Sisaan vs *Order* menunjukkan adanya pola pada sisaan. Untuk lebih lanjut akan digunakan uji formal melihat normalitas sisaan dan plot ACF dan PACF untuk melihat apakah ada autokorelasi atau tidak.
+
+```{r}
+#Melihat Sisaan Menyebar Normal/Tidak
+#H0: sisaan mengikuti sebaran normal
+#H1: sisaan tidak mengikuti sebaran normal
+shapiro.test(sisaan)
+ks.test(sisaan, "pnorm", mean=mean(sisaan), sd=sd(sisaan))
+```
+
+Berdasarkan uji formal Saphiro-Wilk dan Kolmogorov-Smirnov didapatkan nilai *p-value* \> $\alpha$ (5%). Artinya, cukup bukti untuk menyatakan sisaan berdistribusi normal.
+
+```{r}
+#ACF dan PACF identifikasi autokorelasi
+par(mfrow = c(1,2))
+acf(sisaan)
+pacf(sisaan)
+```
+
+Berdasarkan plot ACF dan PACF, terlihat semua dalam rentang batas dan tidak ada yang signifikan. Namun, untuk lebih memastikan akan dilakukan uji formal dengan uji Durbin Watson.
+
+```{r}
+#Deteksi autokorelasi dengan uji-Durbin Watson
+#H0: tidak ada autokorelasi
+#H1: ada autokorelasi
+dwtest(model)
+```
+Berdasarkan nilai *p-value* \< 0.05 dapat disimpulkan bahwa tolak H0, cukup bukti mengatakan adanya autokorelasi. Oleh karena itu, diperlukan penangan autokorelasi. Penanganan yang akan digunakan menggunakan dua metode, yaitu Cochrane-Orcutt dan Hildret-Lu.
+
+## Penanganan Autokorelasi
+
+### Metode Cochrane-Orcutt
+
+Penanganan metode Cochrane-Orcutt dapat dilakukan dengan bantuan packages Orcutt pada aplikasi `R` maupun secara manual. Berikut ini ditampilkan cara menggunakan bantuan `library` *packages* `Orcutt`.
+
+```{r}
+#Penanganan Autokorelasi Cochrane-Orcutt
+modelCO<-cochrane.orcutt(model)
+modelCO
+```
+
+Hasil keluaran model setelah dilakukan penanganan adalah sebagai berikut. $$y_i=41.756193+0.045601x_1+0.115288x_2$$ Hasil juga menunjukkan bahwa nilai DW dan p-value meningkat menjadi $2.16141$. Nilai DW sudah berada pada rentang DU \< DW \< 4-DU atau $1.331 < DW < 2.669$. Hal tersebut juga didukung dengan nilai *p-value* \> 0.05, artinya belum cukup bukti menyatakan bahwa sisaan terdapat autokorelasi pada taraf nyata 5%. Untuk nilai $ρ ̂$ optimum yang digunakan adalah $0.645458$. Nilai tersebut dapat diketahui dengan *syntax* berikut.
+
+```{r}
+#Rho optimum
+rho<- modelCO$rho
+rho
+```
+
+Selanjutnya akan dilakukan transformasi secara manual dengan syntax berikut ini.
+
+```{r}
+#Transformasi Manual
+N02BA.trans <- data$N02BA[-1]-data$N02BA[-70]*rho
+N02BE.trans<- data$N02BE[-1]-data$N02BE[-70]*rho
+N05B.trans<- data$N05B[-1]-data$N05B[-70]*rho
+modelCOmanual<- lm(N02BA.trans~N02BE.trans+N05B.trans)
+summary(modelCOmanual)
+```
+
+Hasil model transformasi bukan merupakan model sesungguhnya. Koefisien regresi masih perlu dicari kembali mengikuti $β_0^*=β_0+ρ ̂β_0$ dan $β_1^*=β_1$.
+
+```{r}
+#Mencari Penduga Koefisien Regresi setelah Transformasi ke Persamaan Awal
+b0bintang <- modelCOmanual$coefficients[1]
+b0 <- b0bintang/(1-rho)
+b1 <- modelCOmanual$coefficients[2]
+b2 <- modelCOmanual$coefficients[3]
+b0
+b1
+b2
+```
+
+Hasil perhitungan koefisien regresi tersebut akan menghasilkan hasil yang sama dengan model yang dihasilkan menggunakan *packages*.
+
+### Metode Hildreth-Lu
+
+Penanganan kedua adalah menggunakan metode Hildreth-Lu. Metode ini akan mencari nilai SSE terkecil dan dapat dicari secara manual maupun menggunakan packages. Jika menggunakan packages, gunakan `library` *packages* `HORM`.
+
+```{r}
+#Penanganan Autokorelasi Hildreth lu
+# Hildreth-Lu
+hildreth.lu.func<- function(r, model){
+  x1 <- model.matrix(model)[,2]
+  x2 <- model.matrix(model)[,3]
+  y <- model.response(model.frame(model))
+  n <- length(y)
+  t <- 2:n
+  y <- y[t]-r*y[t-1]
+  x1 <- x1[t]-r*x1[t-1]
+  x2 <- x2[t]-r*x2[t-1]
+  return(lm(y~x1+x2))
+}
+
+#Pencariab rho yang meminimumkan SSE
+r <- c(seq(0.1,0.9, by= 0.1))
+tab <- data.frame("rho" = r, "SSE" = sapply(r, function(i){deviance(hildreth.lu.func(i, model))}))
+round(tab, 4)
+```
+
+Pertama-tama akan dicari di mana kira-kira $ρ$ yang menghasilkan SSE minimum. Pada hasil di atas terlihat $ρ$ minimum ketika 0.6. Namun, hasil tersebut masih kurang teliti sehingga akan dicari kembali $ρ$ yang lebih optimum dengan ketelitian yang lebih. Jika sebelumnya jarak antar $ρ$ yang dicari adalah 0.1, kali ini jarak antar $ρ$ adalah 0.001 dan dilakukan pada selang 0.5 sampai dengan 0.7.
+
+```{r}
+#Rho optimal di sekitar 0.4
+rOpt <- seq(0.5,0.7, by= 0.001)
+tabOpt <- data.frame("rho" = rOpt, "SSE" = sapply(rOpt, function(i){deviance(hildreth.lu.func(i, model))}))
+tabOpt[order(tabOpt$SSE),]
+
+#Grafik SSE optimum
+par(mfrow = c(1,1))
+plot(tab$SSE ~ tab$rho , type = "l", xlab = "Rho", ylab = "SSE")
+abline(v = tabOpt[tabOpt$SSE==min(tabOpt$SSE),"rho"], lty = 2, col="red",lwd=2)
+text(x=0.6454578, y=26672.12, labels = "rho=0.6454578", cex = 0.8)
+```
+
+Perhitungan yang dilakukan aplikasi `R` menunjukkan bahwa nilai $ρ$ optimum, yaitu saat SSE terkecil terdapat pada nilai $ρ=0.341$. Hal tersebut juga ditunjukkan pada plot. Selanjutnya, model dapat didapatkan dengan mengevaluasi nilai $ρ$ ke dalam fungsi `hildreth.lu.func`, serta dilanjutkan dengan pengujian autokorelasi dengan uji Durbin-Watson. Namun, setelah pengecekan tersebut tidak lupa koefisien regresi tersebut digunakan untuk transformasi balik. Persamaan hasil transformasi itulah yang menjadi persamaan sesungguhnya.
+
+```{r}
+#Model terbaik
+modelHL <- hildreth.lu.func(0.6454578, model)
+modelHL
+summary(modelHL)
+
+#Transformasi Balik
+cat("y = ", coefficients(modelHL)[1]/(1-0.6454578), "+", coefficients(modelHL)[2],"x1","+",coefficients(modelHL)[3],"+","x2",sep = "")
+```
+
+Setelah dilakukan tranformasi balik, didapatkan model dengan metode Hildreth-Lu sebagai berikut. $$y_i=14.804332+0.045601x_1+0.115288x_2$$
+
+```{r}
+#Deteksi autokorelasi
+dwtest(modelHL)
+```
+
+Hasil uji Durbin-Watson juga menunjukkan bawah nilai DW sebesar $2.1614$ berada pada selang daerah bukan autokorelasi, yaitu pada rentang DU \< DW \< 4-DU atau $1.7028 < DW < 2.2972$. Hal tersebut juga didukung oleh *p-value* sebesar $0.7573$, di mana *p-value* \<>$\alpha$=5%. Artinya tak tolak $H_0$ atau tidak cukup bukti menyatakan bahwa ada autokorelasi dalam data nilai N02BA dengan metode Hildreth-Lu pada taraf nyata 5%.
+
+Terakhir, akan dibandingkan nilai SSE dari ketiga metode (metode awal, metode Cochrane-Orcutt, dan Hildreth-Lu).
+
+```{r}
+#Perbandingan
+sseModelawal <- anova(model)$`Sum Sq`[-1]
+sseModelawal
+sseModelCO <- anova(modelCOmanual)$`Sum Sq`[-1]
+sseModelCO
+sseModelHL <- anova(modelHL)$`Sum Sq`[-1]
+sseModelHL
+mseModelawal <- sseModelawal/length(data$N02BA)
+mseModelCO <- sseModelCO/length(data$N02BA)
+mseModelHL <- sseModelHL/length(data$N02BA)
+akurasi <- matrix(c(sseModelawal,sseModelCO,sseModelHL,
+                    mseModelawal,mseModelCO,mseModelHL),nrow=2,ncol=3,byrow = T)
+colnames(akurasi) <- c("Model Awal", "Model Cochrane-Orcutt", "Model Hildreth-Lu")
+row.names(akurasi) <- c("SSE","MSE")
+akurasi
+```
+
+Berdasarkan hasil tersebut dapat diketahui bahwa hasil penanganan autokorelasi dengan metode Cochrane-Orcutt dan Hildreth-Lu memiliki SSE yang berbeda, sebesar $40752.56$ dan $2502.62$.
+
+# Simpulan
+
+Autokorelasi yang terdapat pada data N02BA terjadi akibat adanya korelasi di antara unsur penyusunnya. Indikator N02BA yang erat hubungannya dengan N02BE dan N05B sangat rawan menjadi penyebab adanya autokorelasi. Adanya autokorelasi menyebabkan model regresi kurang baik karena akan meingkatkan galatnya. Autokorelasi dapat dideteksi secara eksploratif melalui plot sisaan, ACF, dan PACF, serta dengan uji formal Durbin-Watson. Namun, autokorelasi tersebut dapat ditangani dengan metode Cochrane-Orcutt dan Hildreth-Lu. Kedua metode menghasilkan nilai SSE yang berbeda dengan metode Hildreth-Lu menghasilkan SSE lebih kecil sehingga lebih baik digunakan.
