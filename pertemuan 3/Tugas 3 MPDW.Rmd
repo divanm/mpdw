@@ -63,7 +63,7 @@ AIC(model.koyck)
 BIC(model.koyck)
 ```
 
-Dari hasil tersebut, didapat bahwa peubah $y_{t-1}$ memiliki nilai $P-Value<0.05$. Hal ini menunjukkan bahwa peubah$y_{t-1}$ berpengaruh signifikan terhadap $y$. Adapun model keseluruhannya adalah sebagai berikut
+Dari hasil tersebut, didapat bahwa peubah $y_{t-1}$ memiliki nilai $P-Value<0.05$. Hal ini menunjukkan bahwa peubah$y_{t-1}$ berpengaruh signifikan terhadap $y$. Artinya, menurut model Koyck, nilai AQI saat ini dipengaruhi oleh nilai AQI satu hari sebelumnya. Adapun model keseluruhannya adalah sebagai berikut
 
 $$
 \hat{Y_t}=2.8427209+0.8979076Y_{t-1}-0.0007616X_t
@@ -168,8 +168,11 @@ AIC(model.ardl)
 BIC(model.ardl)
 ```
 
-Hasil di atas menunjukkan bahwa selain peubah $X_{t-6}$ dan $Y_{t-1}$, hasil uji t menunjukkan nilai-p pada peubah $\ > 0.05$ Hal ini menunjukkan bahwa peubah $X_{t-6}$ dan $Y_{t-1}$ berpengaruh signifikan terhadap $Y_t$, sementara peubah lain tidak berpengaruh signifikan terhadap $Y_t$. 
+Hasil di atas menunjukkan bahwa selain peubah $X_{t-6}$ dan $Y_{t-1}$, hasil uji t menunjukkan nilai-p pada peubah $\ < 0.05$ Hal ini menunjukkan bahwa peubah $X_{t-6}$ dan $Y_{t-1}$ berpengaruh signifikan terhadap $Y_t$, sementara peubah lain tidak berpengaruh signifikan terhadap $Y_t$. 
+Artinya, menurut model DLM dengan q=10, nilai AQI saat ini dipengaruhi oleh kandungan O3 6 hari sebelumnya, dan nilai AQI 1 hari sebelumnya. 
+Adapun modelnya seperti berikut:
 
+$$\hat{Y_t}=-31.48686 +0.16013X_t+0.16148X_{t-1}-0.22167X_{t-2}+0.04328X_{t-3}+0.05855X_{t-4}-0.23618X_{t-5}+0.3372X_{t-6}+0.02778 X_{t-7}-0.18545X_{t-8}+0.07553X_{t-9}+0.07361X_{t-10}-0.05438X_{t-11}-0.07336X_{t-12}+0.02964X_{t-13}+0.10040X_{t-14}-0.07181X_{t-15}+0.79038Y_{t-1}+0.17418Y_{t-2}-0.03007Y_{t-3}-0.19852Y_{t-4}-0.18070Y_{t-5}-0.05696Y_{t-6}$$
 ### Peramalan dan Akurasi Model ARDL
 
 ```{r}
