@@ -1,0 +1,318 @@
+---
+title: "PEMODELAN DRIFT DAN INTERSEP ARIMA PADA DATA SUHU UDARA DI KEDIRI"
+output:
+  html_document:
+    theme: yeti
+    toc: true
+    toc_float: true
+  word_document: default
+  pdf_document: default
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+#library
+
+```{r}
+library("forecast")
+library("graphics")
+library("TTR")
+library("TSA")
+library(dplyr)
+library(forecast)
+library(lmtest) 
+library(orcutt) 
+library(HoRM) 
+library(corrplot)
+library(dLagM)
+library(dynlm)
+library(MLmetrics)
+library(ggplot2)
+library(tsibble)
+library(tseries)
+library(MASS)
+library(aTSA)
+```
+
+# Input data
+
+```{r}
+library(rio)
+datakukd <- import("https://raw.githubusercontent.com/febridwi22/MPDW/main/Data/mpdw111.csv")
+datakukd
+```
+
+## Ubah data menjadi time series
+
+```{r}
+datakukd.ts <- ts(datakukd$suhu)
+```
+## Membagi data menjadi data latih (80%) dan data uji (20%) dan jadikan time series
+
+```{r}
+dtkukd.latih <- datakukd[1:106,2]
+dtkukd.uji <- datakukd[107:132,2]
+dtkukd.latih.ts <- ts(dtkukd.latih, frequency = 12)
+dtkukd.uji.ts <- ts(dtkukd.uji, frequency = 12)
+```
+
+# Eksplorasi data
+
+```{r}
+# data full
+ts.plot(datakukd.ts, col="blue",main="Plot semua data", type="o",xlab="Time",ylab="Data")
+points(datakukd.ts)
+
+# data latih
+ts.plot(dtkukd.latih.ts, col="red",main="Plot data latih", type="o",xlab="Time",ylab="Data")
+points(dtkukd.latih.ts)
+
+# data uji
+ts.plot(dtkukd.uji.ts, col="purple",main="Plot data uji", type="o",xlab="Time",ylab="Data")
+points(dtkukd.uji.ts)
+```
+
+# CEK Stasioner
+
+## Plot acf
+
+```{r}
+acf(dtkukd.latih.ts, main="ACF", lag.max=20)
+```
+Berdasarkan plot ACF, terlihat bahwa plot ACF pada data tersebut cenderung *cut off* dan membentuk gelombang sinus menandakan bahwa data tersebut stasioner dalam rataan
+
+## Uji ADF
+
+```{r}
+tseries::adf.test(dtkukd.latih.ts)
+```
+
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.01 yang lebih kecil dari taraf nyata 5% sehingga tolak $H_0$ dan menandakan bahwa data stasioner dalam rataan. Hal ini sesuai dengan hasil eksplorasi menggunakan plot time series dan plot ACF.
+
+## Plot Box-Cox
+
+```{r}
+index <- seq(1:106)
+bc = boxcox(dtkukd.latih.ts~index, lambda = seq(-17,4,by=0.01))
+#Nilai Rounded Lambda
+lambda <- bc$x[which.max(bc$y)]
+lambda
+#SK
+bc$x[bc$y > max(bc$y) - 1/2 * qchisq(.95,1)]
+```
+
+# Identifikasi model
+
+## Plot ACF dan PACF
+
+```{r}
+par(mfrow = c(1,2))
+acf(dtkukd.latih.ts, main="ACF", lag.max=30) 
+pacf(dtkukd.latih.ts, main="PACF", lag.max=30) 
+```
+
+Berdasarkan plot tersebut, terlihat bahwa plot ACF cenderung cuts off pada lag ke 1, sehingga jika plot PACF dianggap tails of, maka model tentatifnya adalah ARIMA(0,0,1).
+
+Berdasarkan plot tersebut, terlihat bahwa plot PACF cenderung cuts off pada lag ke 1, sehingga jika plot ACF dianggap tails of, maka model tentatifnya adalah ARIMA(1,0,0).
+
+## Plot EACF
+
+```{r}
+eacf(dtkukd.latih.ts)
+```
+
+identifikasi model menggunakan plot EACF dilakukan dengan melihat ujung segitiga pada pola segitiga nol. Dalam hal ini model tentatif yang terbentuk adalah ARIMA (2,0,0), dan ARIMA (1,0,1) 
+
+sehingga model tentafifnya ialah ARIMA(0,0,1), ARIMA(1,0,0), ARIMA(2,0,0), dan ARIMA (1,0,1) 
+
+# Pendugaan Parameter
+## Model dengan drift tanpa intersep 
+### ARIMA (0,0,1)
+
+```{r}
+model1 <- Arima(dtkukd.latih.ts, order = c(0,0,1),method="ML")
+summary(model1) 
+lmtest::coeftest(model1) 
+```
+
+### ARIMA (1,0,0)
+
+```{r}
+model2=Arima(dtkukd.latih.ts, order=c(1,0,0),method="ML")
+summary(model2) #AIC=301.33
+lmtest::coeftest(model2)
+```
+### ARIMA (2,0,0)
+
+```{r}
+model3=Arima(dtkukd.latih.ts, order=c(2,0,0),method="ML")
+summary(model3) 
+lmtest::coeftest(model3) 
+```
+
+### ARIMA (1,0,1)
+
+```{r}
+model4=Arima(dtkukd.latih.ts, order=c(1,0,1),method="ML")
+summary(model4) #AIC=274.19
+lmtest::coeftest(model4) 
+```
+
+Penduga terbaik ialah aic terkecil dan parameter signifikan yang terdapat di ARIMA(2,0,0)
+
+## Model dengan intersep tanpa drift
+### ARIMA (0,0,1)
+```{r}
+model5 <- arima(dtkukd.latih.ts, order = c(0,0,1), include.mean = TRUE)
+coeftest(model5)
+model5
+```
+### ARIMA (1,0,0)
+```{r}
+model6 <- arima(dtkukd.latih.ts, order = c(1,0,0), include.mean = TRUE)
+coeftest(model6)
+model6
+```
+### ARIMA (2,0,0)
+```{r}
+model7 <- arima(dtkukd.latih.ts, order = c(2,0,0), include.mean = TRUE)
+coeftest(model7)
+model7
+```
+### ARIMA (1,0,1)
+```{r}
+model8 <- arima(dtkukd.latih.ts, order = c(1,0,1), include.mean = TRUE)
+coeftest(model8)
+model8
+```
+
+## Model tanpa intersep dan tanpa drift
+### ARIMA (0,0,1)
+```{r}
+model9 <- arima(dtkukd.latih.ts, order = c(0,0,1),method="ML")
+coeftest(model9)
+model9
+```
+### ARIMA (1,0,0)
+```{r}
+model10 <- arima(dtkukd.latih.ts, order = c(1,0,0),method="ML")
+coeftest(model10)
+model10
+```
+### ARIMA (2,0,0)
+```{r}
+model11 <- arima(dtkukd.latih.ts, order = c(2,0,0),method="ML")
+coeftest(model11)
+model11
+```
+### ARIMA (1,0,1)
+```{r}
+model12 <- arima(dtkukd.latih.ts, order = c(1,0,1),method="ML")
+coeftest(model12)
+model12
+```
+Oleh karena itu, dipilih model 7 atau model 11 karena memiliki AIC terkecil serta semua parameter signifikan
+
+# Analisis sisaan
+## Eksplorasi 
+
+```{r}
+#Eksplorasi 
+sisaan.da <- model7$residuals 
+par(mfrow=c(2,2)) 
+qqnorm(sisaan.da) 
+qqline(sisaan.da, col = "brown", lwd = 2) 
+plot(c(1:length(sisaan.da)),sisaan.da) 
+acf(sisaan.da) 
+pacf(sisaan.da) 
+par(mfrow = c(1,1))
+```
+## Uji Formal
+### 1) Sisaan Menyebar Normal
+
+```{r}
+ks.test(sisaan.da,"pnorm")
+```
+
+$H_0$ : Sisaan menyebar normal
+
+$H_1$ : Sisaan tidak menyebar normal
+
+Berdasarkan uji KS tersebut, didapat *p-value* sebesar 0.1035 yang lebih besar dari taraf nyata 5% sehingga tak tolak $H_0$ dan menandakan bahwa sisaan menyebar normal. Hal ini sesuai dengan hasil eksplorasi menggunakan plot kuantil-kuantil normal.
+
+### 2) Sisaan saling bebas/tidak ada autokorelasi
+```{r}
+Box.test(sisaan.da, type = "Ljung")  
+```
+
+$H_0$ : Sisaan saling bebas
+
+$H_1$ : Sisaan tidak tidak saling bebas
+
+Berdasarkan uji Ljung-Box tersebut, didapat *p-value* sebesar 0.7049 yang lebih besar dari taraf nyata 5% sehingga tak tolak $H_0$ dan menandakan bahwa sisaan saling bebas. Artinya tidak ada autokorelasi
+
+### 3) Sisaan homogen
+```{r}
+Box.test((sisaan.da)^2, type = "Ljung") 
+```
+
+$H_0$ : Ragam sisaan homogen
+
+$H_1$ : Ragam sisaan tidak homogen
+
+Berdasarkan uji Ljung-Box tersebut. didapat *p-value* sebesar 0.3474 yang lebih besar dari taraf nyata 5% sehingga tak tolak $H_0$ dan menandakan bahwa ragam sisaan homogen
+
+### 4) Nilai tengah sisaan sama dengan nol 
+```{r}
+t.test(sisaan.da, mu = 0, conf.level = 0.95)  #tak tolak h0 > nilai tengah sisaan sama dengan 0
+```
+
+$H_0$ : nilai tengah sisaan sama dengan 0
+
+$H_1$ : nilai tengah sisaan tidak sama dengan 0
+
+Berdasarkan uji-ttersebut, didapat *p-value* sebesar 0.9789 yang lebih besar dari taraf nyata 5% sehingga tak tolak $H_0$ dan menandakan bahwa nilai tengah sisaan sama dengan 0
+
+# Overfitting
+
+## ARIMA(2,0,1)
+
+```{r}
+model13=arima(dtkukd.latih.ts, order=c(2,0,1),method="ML")
+coeftest(model13)
+model13
+```
+## ARIMA(3,0,0)
+
+```{r}
+model14=arima(dtkukd.latih.ts, order=c(3,0,0),method="ML")
+coeftest(model14)
+model14
+```
+berdasarkan hasil overfitting yg terbaik tetap model ARIMA(2,0,0) dengan intersep dan tanpa drift
+
+# Peramalan
+
+```{r}
+ramalan <- predict(model7, n.ahead = 26) 
+ramalan
+data.ramalan <- ramalan$mean
+plot(ramalan$pred)
+```
+
+# AKURASI
+
+```{r}
+perbandingan <- matrix(data=c(dtkukd.uji.ts, data.ramalan),
+                     nrow = length(dtkukd.uji.ts), ncol = 2)
+colnames(perbandingan) <- c("Aktual","Hasil Forecast")
+perbandingan
+accuracy_metrics <- accuracy(ramalan$pred, dtkukd.uji)
+accuracy_metrics
+```
+
